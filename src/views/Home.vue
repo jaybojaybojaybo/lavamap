@@ -1,7 +1,3 @@
-<template>
-  <div></div>
-</template>
-
 <script lang="ts">
 import { Dimensions } from '@/models/dimensions'
 import { useKeyHandler } from '@/composables/useKeyHandler'
@@ -24,6 +20,7 @@ import {
   GridHelper,
 Intersection,
 InstancedMesh,
+ColorRepresentation,
 } from 'three'
 import { MapControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js'
@@ -54,9 +51,10 @@ export default defineComponent({
     scene.background = new Color('#000')
 
     // GRID HELPER
-    const gridSize = 1000
-    const gridDivisions = 1000
+    const gridSize = 100
+    const gridDivisions = gridSize*2
     const grid: GridHelper = new GridHelper(gridSize, gridDivisions)
+    grid.name = 'grid'
     scene.add(grid)
 
     // MESHES
@@ -67,36 +65,40 @@ export default defineComponent({
         height: 1,
         depth: 1
       }
+      const cubeColor: ColorRepresentation = 0xffffff
       const geometry = new BoxGeometry( cubeDims.width, cubeDims.height, cubeDims.depth )
       const material = new MeshBasicMaterial({
-        color: 0x00ff00,
+        color: cubeColor,
         wireframe: false,
         transparent: false,
         // opacity: 0.0
       })
       const cube = new Mesh( geometry, material )
       cube.position.copy(new Vector3(Math.round(x), cubeDims.height/2, Math.round(z)))
-      console.log('cube.position: ', cube.position)
-      cube.material.color.setHex( Math.random() * 0xffffff )
-      cube.name = cubeIndex.toString();
+      cube.material.color.setHex( Math.random() * cubeColor )
+      cube.name = 'cube' + cubeIndex.toString();
       cubeIndex++
       return cube
     }
     
     // CAMERA
-    const frustrumSize = 500
+    const viewportWidth = gridSize * aspectRatio
+    const viewportHeight = gridSize
+    const zoomWidth = gridSize
+    const zoomHeight = zoomWidth/aspectRatio
     const near = 1;
     const far = 1000
     const camera = new OrthographicCamera(
-        canvasWidth / - 2 , 
-        canvasWidth / 2, 
-        canvasHeight / 2, 
-        canvasHeight / - 2, 
+        viewportWidth / - 2 , 
+        viewportWidth / 2, 
+        viewportHeight / 2, 
+        viewportHeight / - 2, 
         near,
         far
-    ) 
-    camera.position.copy(new Vector3(0, far/2, 0))
-    camera.zoom = 65
+    )
+    const initialZoomFactor = zoomHeight < viewportHeight ? viewportHeight/zoomHeight * 10 : 1
+    camera.position.copy(new Vector3(0, 0, 0))
+    camera.zoom = initialZoomFactor
     camera.lookAt(0, 0, 0)
     camera.updateProjectionMatrix()
     camera.name = 'orthoCamera'
@@ -120,10 +122,10 @@ export default defineComponent({
     transformControls.addEventListener( 'dragging-changed', function ( event ) {
       mapControls.value.enabled = ! event.value
     })
-    transformControls.setTranslationSnap( .5 )
+    transformControls.setTranslationSnap( 1 )
     transformControls.setRotationSnap( MathUtils.degToRad( 15 ) )
-    transformControls.setScaleSnap( 0.5 )
-    scene.add(transformControls as TransformControls)
+    transformControls.setScaleSnap( 1 )
+    // scene.add(transformControls as TransformControls)
     
     // RAYCASTER + MOUSE
     const raycaster: Raycaster = new Raycaster()
@@ -135,66 +137,89 @@ export default defineComponent({
       switch ( event.key ) {
         case "t":
         case "T":
-            console.log('you tryina Translate, bro?')
-            transformControls.setMode( 'translate' )
-            break
+          transformControls.showX = true
+          transformControls.showY = false
+          transformControls.showZ = true
+          console.log('you tryina Translate, bro?')
+          transformControls.setMode( 'translate' )
+          break
         case "r":
         case "R":
+          if (event.ctrlKey === false) {
             console.log('yo, where is the rotation?')
+            transformControls.showX = false
+            transformControls.showY = true
+            transformControls.showZ = false
             transformControls.setMode( 'rotate' )
             transformControls.rotationSnap = MathUtils.degToRad(15)
-            break
+          }
+          break
         case "s":
         case "S":
-            console.log('adjust scale?')
-            transformControls.setMode( 'scale' )            
-            break
+          transformControls.showX = true
+          transformControls.showY = false
+          transformControls.showZ = true
+          console.log('adjust scale?')
+          transformControls.setMode( 'scale' )            
+          break
         case "+":
         case "=": // +, =, num+
-            transformControls.setSize( transformControls.size + 0.1 )            
-            break
+          transformControls.setSize( transformControls.size + 0.1 )            
+          break
         case "-":
         case "_": // -, _, num-
-            transformControls.setSize( Math.max( transformControls.size - 0.1, 0.1 ) )            
-            break
+          transformControls.setSize( Math.max( transformControls.size - 0.1, 0.1 ) )            
+          break
         case "x": // X
-            transformControls.showX = ! transformControls.showX            
-            break
+          transformControls.showX = ! transformControls.showX            
+          break
         case "y": // Y
-            transformControls.showY = ! transformControls.showY            
-            break
+          transformControls.showY = ! transformControls.showY            
+          break
         case "z": // Z
-            transformControls.showZ = ! transformControls.showZ            
-            break
+          transformControls.showZ = ! transformControls.showZ            
+          break
         case " ": // Spacebar
-            transformControls.enabled = ! transformControls.enabled            
-            break
+          transformControls.enabled = ! transformControls.enabled            
+          break
         case "Esc": // Esc
             transformControls.reset()            
             break
         }
     }
     // MOUSE CLICK
+    let index = 0
     function handleIntersects(event: MouseEvent) { 
       event.preventDefault()
       // Find intersections.
       let intersects = raycaster.intersectObjects(scene.children, true) as Intersection[]
-      if (intersects.length > 0) {
-        // Console logging the array of intersections.
-        for (const intersect of intersects) {
-          // if existing object is selected
-          if (intersect.object.type !== 'GridHelper') {
-            transformControls.attach(intersect.object)
+      if (intersects.length > 0) {       
+        // if existing object is selected        
+        // if no object is selected
+        console.log('intersects @' + index + ' length: ', intersects.length)
+        index ++
+        if (
+          intersects[0].object.type === 'GridHelper' || 
+          intersects[0].object.type === 'TransformControlsPlane' ||
+          (intersects[0].object.type === 'Line' && intersects[0].object.parent?.type !== 'TransformControlsPlane')
+        ) {
+            console.log('first one was one of the three: ', intersects[0])
+            let cube = createCube(intersects[0].point.x, intersects[0].point.z)
+            scene.add(cube)
+            transformControls.attach(cube)
             scene.add(transformControls as TransformControls)
             intersects.length = 0
-          } 
-          // if no object is selected
-          console.log('intersect: ', intersect)
-          let cube = createCube(intersect.point.x, intersect.point.z)
-          scene.add(cube)
-          transformControls.attach(cube)
-          scene.add(transformControls as TransformControls)
-          intersects.length = 0
+        } else if (
+          intersects[0].object.type === 'Mesh' && 
+          intersects[0].object.name.includes('cube')
+        )
+        {
+            intersects.forEach((intersect) => {
+              console.log('intersect @' + intersects.indexOf(intersect) + ': ', intersect )
+              transformControls.attach(intersect.object)
+              scene.add(transformControls as TransformControls)
+              intersects.length = 0
+            })
         }
       }
     }    
@@ -215,9 +240,9 @@ export default defineComponent({
       window.addEventListener( 'keydown', handleKeyPress, true)
       renderer.value.domElement.addEventListener('mousemove', (event: MouseEvent) => {
         mouseVector.x = (event.offsetX / renderer.value.domElement.clientWidth) * 2 - 1
-        mouseVector.y = (event.offsetY / renderer.value.domElement.clientHeight) * 2 + 1
+        mouseVector.y = -(event.offsetY / renderer.value.domElement.clientHeight) * 2 + 1
       })
-      renderer.value.domElement.addEventListener('click', handleIntersects, true)
+      renderer.value.domElement.addEventListener('mousedown', handleIntersects, true)
       animate()
     })
 
