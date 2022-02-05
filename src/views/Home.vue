@@ -1,7 +1,5 @@
 <script lang="ts">
 import { Dimensions } from '@/models/dimensions'
-import { useKeyHandler } from '@/composables/useKeyHandler'
-import { useTransformControls } from '@/composables/useTransformControls'
 // THREE
 import {
   Scene,
@@ -18,16 +16,17 @@ import {
   Vector3,
   MathUtils,
   GridHelper,
-Intersection,
-InstancedMesh,
-ColorRepresentation,
+  Intersection,
+  ColorRepresentation,
+TetrahedronGeometry,
+SphereGeometry,
 } from 'three'
 import { MapControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js'
 // VUE
-import { defineComponent, onMounted, onUnmounted, reactive, ref, Ref } from 'vue'
+import { defineComponent, inject, onMounted, onUnmounted, reactive, ref, Ref, toRef, toRefs, watch } from 'vue'
 
-export default defineComponent({
+export default defineComponent({  
   setup() {
     // CANVAS + VARIABLES
     let canvasWidth: number = document.documentElement.clientWidth
@@ -58,8 +57,22 @@ export default defineComponent({
     scene.add(grid)
 
     // MESHES
+    let selectedShape = ref<string>('')
+    function createMesh(x: number, y: number) {
+      console.log('selectedShape: ', selectedShape.value)
+      if (selectedShape.value === 'Cube') {
+        return createCube(x, y)          
+      } else if (selectedShape.value === 'Tetrahedron') {
+        return createTetra(x, y)
+      } else if (selectedShape.value === 'Sphere') {
+        return createSphere(x, y)
+      } else {
+        console.log('What are you trying to build there, bud?')
+      }
+    }
+    // CUBE
     let cubeIndex = 0
-    function createCube(x: number, z: number) {
+    function createCube(x: number, z: number): Mesh {
       const cubeDims: Dimensions = {
         width: 1,
         height: 1,
@@ -76,10 +89,52 @@ export default defineComponent({
       const cube = new Mesh( geometry, material )
       cube.position.copy(new Vector3(Math.round(x), cubeDims.height/2, Math.round(z)))
       cube.material.color.setHex( Math.random() * cubeColor )
-      cube.name = 'cube' + cubeIndex.toString();
+      cube.name = 'mesh' + cubeIndex.toString();
       cubeIndex++
       return cube
     }
+    // TETRAHEDRON
+    let tetraIndex = 0
+    function createTetra(x: number, z: number): Mesh {
+      const radius = 1
+      const tetraColor: ColorRepresentation = 0xffffff
+      const geometry = new TetrahedronGeometry( radius )
+      const material = new MeshBasicMaterial({
+        color: tetraColor,
+        wireframe: false,
+        transparent: false,
+        // opacity: 0.0
+      })
+      const tetra = new Mesh( geometry, material )
+      tetra.position.copy(new Vector3(Math.round(x), radius/2, Math.round(z)))
+      tetra.material.color.setHex( Math.random() * tetraColor )
+      tetra.name = 'mesh' + tetraIndex.toString();
+      tetraIndex++
+      return tetra
+    }
+    // SPHERE
+    let sphereIndex = 0
+    function createSphere(x: number, z: number): Mesh {
+      const radius = 2;
+      const widthSegments = 12;
+      const heightSegments = 8;
+      const sphereColor: ColorRepresentation = 0xffffff
+      const geometry = new SphereGeometry( radius, widthSegments, heightSegments )
+      const material = new MeshBasicMaterial({
+        color: sphereColor,
+        wireframe: false,
+        transparent: false,
+        // opacity: 0.0
+      })
+      const sphere = new Mesh( geometry, material )
+      sphere.position.copy(new Vector3(Math.round(x), radius/2, Math.round(z)))
+      sphere.material.color.setHex( Math.random() * sphereColor )
+      sphere.name = 'mesh' + sphereIndex.toString();
+      sphereIndex++
+      return sphere
+    }
+
+    // END OF MESHES
     
     // CAMERA
     const viewportWidth = gridSize * aspectRatio
@@ -204,9 +259,9 @@ export default defineComponent({
           (intersects[0].object.type === 'Line' && intersects[0].object.parent?.type !== 'TransformControlsPlane')
         ) {
             console.log('first one was one of the three: ', intersects[0])
-            let cube = createCube(intersects[0].point.x, intersects[0].point.z)
-            scene.add(cube)
-            transformControls.attach(cube)
+            let mesh = createMesh(intersects[0].point.x, intersects[0].point.z) as Mesh
+            scene.add(mesh)
+            transformControls.attach(mesh)
             scene.add(transformControls as TransformControls)
             intersects.length = 0
         } else if (
@@ -243,6 +298,7 @@ export default defineComponent({
         mouseVector.y = -(event.offsetY / renderer.value.domElement.clientHeight) * 2 + 1
       })
       renderer.value.domElement.addEventListener('mousedown', handleIntersects, true)
+      selectedShape.value = inject('selectedShape') as string
       animate()
     })
 
