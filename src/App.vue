@@ -1,5 +1,5 @@
 <template>  
-  <navbar id="navbar" @setShape="provideShape"></navbar>
+  <navbar id="navbar" @setShape="provideShape" @setMode="provideMode" @saveEdit="saveEdit"></navbar>
   <router-view />
 </template>
 
@@ -12,16 +12,31 @@ export default defineComponent({
     Navbar
   },
   setup() {
-    function provideShape(val: Ref) {
-      console.log('val on App: ', val)
-      provide('selectedShape', val)
+    // MODES
+    const selectedMode = ref<string>('')
+    function provideMode(val: Ref<string>) {
+      console.log('mode on App: ', val.value)
+      selectedMode.value = val.value
+    }   
+    let isEdit = ref(false)
+    function saveEdit() {
+      console.log('edits have been saved, exit edit mode')
+      isEdit.value = false
     }
-    onMounted(() => {
-      console.log('we out here')
-      provideShape(ref('Cube'))
-    })
+    // SHAPES
+    const selectedShape = ref<string>('')
+    function provideShape(val: Ref<string>) {
+      console.log('shape on App: ', val.value)
+      selectedShape.value = val.value
+    }
+    provide('selectedShape', selectedShape)
+    provide('selectedMode', selectedMode)
+    provide('saveEdit', false)
+    provide('isEdit', isEdit)
     return {
-      provideShape      
+      provideShape,
+      provideMode,
+      saveEdit
     }
   }
 })
