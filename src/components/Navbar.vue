@@ -3,8 +3,27 @@
         <div class="float-left justify-left font-bold">
             LAVAMAP
         </div>
+        <!-- left -->
+        <!-- MODES -->
+        <div class="float-right justify-right">
+            <!-- MENU -->
+            <div class="flex pt-2 pb-4" @click="modeOpen = !modeOpen">
+                <!-- mode Name -->            
+                <div class="vertical-divider m-3">Current Mode: {{ modeName }}</div>
+                <!-- mode Dropdown -->
+                <mode-dropdown :modes="modes" v-if="modeOpen" @closeMenu="closeMenus" @selectedMode="setMode"></mode-dropdown>
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 m-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                </svg>
+                <button class="bg-transparent hover:bg-black text-black font-semibold hover:text-white h-7 px-2 border border-blue-500 hover:border-transparent rounded" 
+                        v-if="isEditMode" 
+                        @click="saveEdit">
+                    Save
+                </button>     
+            </div>
+        </div>
         <!-- right -->
-        <!-- Accounts Button & Dropdown -->
+        <!-- SHAPES -->
         <div class="float-right justify-right">
             <!-- MENU -->
             <div class="flex pt-2 pb-4" @click="shapeOpen = !shapeOpen">
@@ -30,22 +49,40 @@ import {
 onMounted,
 } from 'vue'
 import ShapeDropdown from './ShapeDropdown.vue'
+import ModeDropdown from './ModeDropdown.vue'
 
 export default defineComponent({
     components: {
-        ShapeDropdown
+        ShapeDropdown,
+        ModeDropdown
     },
-    emits: ['setShape'],
-    setup(props, {emit}) {        
+    emits: ['setMode', 'setShape', 'saveEdit'],
+    setup(props, {emit}) {
+        // MODES
+        const modes = [
+            'Add',
+            'Edit',
+            'Delete'            
+        ]
+        let modeName = ref('')        
+        const modeOpen = ref(false);        
+        let isEditMode = ref(inject('isEdit'))
+        function setMode(val: string) {
+            console.log('val: ', val)
+            if (val === 'Edit') {
+                isEditMode.value = true
+            }
+            modeName.value = val
+            emit('setMode', modeName)
+        }
+        // SHAPES
         const shapes = [
             'Cube',
             'Tetrahedron',
             'Sphere'            
         ]
-        let shapeName = ref('')
-        
+        let shapeName = ref('')        
         const shapeOpen = ref(false);        
-
         function setShape(val: string) {
             console.log('val: ', val)
             shapeName.value = val
@@ -57,16 +94,29 @@ export default defineComponent({
             document.getElementById('shape-dropdown-button')?.blur()
         }
 
+        function saveEdit() {
+            console.log('in Navbar and saving')
+            emit('saveEdit')
+        }
+
         onMounted(() => {
-            shapeName.value = shapes[0]
+            isEditMode.value = false
+            setMode(modeName.value = modes[0])
+            setShape(shapeName.value = shapes[0])
         })
 
         return {
+            modeName,
+            modes,
+            modeOpen,
+            setMode,
             shapeName,
             shapes,
             shapeOpen,
+            setShape,
             closeMenus,
-            setShape
+            isEditMode,
+            saveEdit
         }
     },
 })
