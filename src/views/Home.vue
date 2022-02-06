@@ -1,4 +1,7 @@
 <script lang="ts">
+import useMapControls from '@/composables/useMapControls'
+import useOrthographicCamera from '@/composables/useOrthographicCamera'
+import usePerspectiveCamera from '@/composables/usePerspectiveCamera'
 import { Dimensions } from '@/models/dimensions'
 // THREE
 import {
@@ -18,36 +21,46 @@ import {
   GridHelper,
   Intersection,
   ColorRepresentation,
-TetrahedronGeometry,
-SphereGeometry,
+  TetrahedronGeometry,
+  SphereGeometry,
+  PerspectiveCamera,
 } from 'three'
-import { MapControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js'
 // VUE
 import { defineComponent, inject, onMounted, onUnmounted, reactive, ref, Ref, toRef, toRefs, watch } from 'vue'
 
 export default defineComponent({  
   setup() {
+    // NAVBAR INFO
+    const headerHeightRef = ref<number>(
+      (
+        document.querySelector('#navbar') ? 
+        document.querySelector('#navbar')?.clientHeight : 
+        0
+      ) as number
+    )
     // CANVAS + VARIABLES
     let canvasWidth: number = document.documentElement.clientWidth
-    let canvasHeight: number = document.documentElement.clientHeight
+    let canvasHeight: number = document.documentElement.clientHeight - headerHeightRef.value
     const aspectRatio = canvasWidth / canvasHeight
-    
+   
     // RENDERER
-    const renderer: Ref<WebGLRenderer> = ref(new WebGLRenderer({antialias: true}))
-    renderer.value.setSize(canvasWidth, canvasHeight)
-    renderer.value.setPixelRatio(Math.min(window.devicePixelRatio, 2))
-    renderer.value.physicallyCorrectLights = true
-    renderer.value.outputEncoding = sRGBEncoding
-    renderer.value.toneMapping = ReinhardToneMapping
-    renderer.value.toneMappingExposure = 12
+    const renderer = new WebGLRenderer({antialias: true})
+    renderer.setSize(canvasWidth, canvasHeight)
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+    renderer.domElement.style.position = 'absolute'
+    renderer.domElement.style.top = headerHeightRef.value + 'px'
+    renderer.physicallyCorrectLights = true
+    renderer.outputEncoding = sRGBEncoding
+    renderer.toneMapping = ReinhardToneMapping
+    renderer.toneMappingExposure = 12
     const render = () => {
-      renderer.value.render(scene, camera)
+      renderer.render(scene, currentCamera.value as PerspectiveCamera | OrthographicCamera)
     }
 
     // SCENE
     const scene: Scene = new Scene()
-    scene.background = new Color('#000')
+    scene.background = new Color('#000')    
 
     // GRID HELPER
     const gridSize = 100
@@ -57,7 +70,8 @@ export default defineComponent({
     scene.add(grid)
 
     // MESHES
-    let selectedShape = ref<string>('')
+    const selectedShape: Ref<string> = inject('selectedShape') as Ref<string>    
+
     function createMesh(x: number, y: number) {
       console.log('selectedShape: ', selectedShape.value)
       if (selectedShape.value === 'Cube') {
@@ -70,7 +84,7 @@ export default defineComponent({
         console.log('What are you trying to build there, bud?')
       }
     }
-    // CUBE
+     // CUBE
     let cubeIndex = 0
     function createCube(x: number, z: number): Mesh {
       const cubeDims: Dimensions = {
@@ -96,7 +110,7 @@ export default defineComponent({
     // TETRAHEDRON
     let tetraIndex = 0
     function createTetra(x: number, z: number): Mesh {
-      const radius = 1
+      const radius = .5
       const tetraColor: ColorRepresentation = 0xffffff
       const geometry = new TetrahedronGeometry( radius )
       const material = new MeshBasicMaterial({
@@ -115,7 +129,7 @@ export default defineComponent({
     // SPHERE
     let sphereIndex = 0
     function createSphere(x: number, z: number): Mesh {
-      const radius = 2;
+      const radius = .5;
       const widthSegments = 12;
       const heightSegments = 8;
       const sphereColor: ColorRepresentation = 0xffffff
@@ -137,45 +151,28 @@ export default defineComponent({
     // END OF MESHES
     
     // CAMERA
-    const viewportWidth = gridSize * aspectRatio
-    const viewportHeight = gridSize
-    const zoomWidth = gridSize
-    const zoomHeight = zoomWidth/aspectRatio
-    const near = 1;
-    const far = 1000
-    const camera = new OrthographicCamera(
-        viewportWidth / - 2 , 
-        viewportWidth / 2, 
-        viewportHeight / 2, 
-        viewportHeight / - 2, 
-        near,
-        far
-    )
-    const initialZoomFactor = zoomHeight < viewportHeight ? viewportHeight/zoomHeight * 10 : 1
-    camera.position.copy(new Vector3(0, 0, 0))
-    camera.zoom = initialZoomFactor
-    camera.lookAt(0, 0, 0)
-    camera.updateProjectionMatrix()
-    camera.name = 'orthoCamera'
-    scene.add(camera)
+    
+    const perspCamera = usePerspectiveCamera(gridSize, aspectRatio)
+    const orthoCamera = useOrthographicCamera(gridSize, aspectRatio)
+    const currentCamera = ref()
+    currentCamera.value = perspCamera as PerspectiveCamera
+    scene.add(currentCamera.value)
     
     // MAP CONTROLS
-    const mapControls = ref(new MapControls(camera, renderer.value.domElement))
-    mapControls.value.enableDamping = true
-    mapControls.value.dampingFactor = 0.05
-    mapControls.value.screenSpacePanning = false
-    mapControls.value.minDistance = near * 10
-    mapControls.value.maxDistance = far
-    mapControls.value.enableRotate = false
-    mapControls.value.enablePan = true
-    mapControls.value.addEventListener( 'change', render )
+
+    const perspMapControls = useMapControls(perspCamera, renderer.domElement)
+    perspMapControls.value.addEventListener('change', render)
+    const orthoMapControls = useMapControls(orthoCamera, renderer.domElement)
+    orthoMapControls.value.enabled = false
+    orthoMapControls.value.addEventListener('change', render)
 
     // TRANSFORM CONTROLS
-    let transformControls = new TransformControls(camera, renderer.value.domElement)
+    let transformControls = new TransformControls(currentCamera.value, renderer.domElement)
     transformControls.setSize( 1 )
     transformControls.addEventListener( 'change', render )
     transformControls.addEventListener( 'dragging-changed', function ( event ) {
-      mapControls.value.enabled = ! event.value
+      perspMapControls.value.enabled = ! event.value
+      orthoMapControls.value.enabled = ! event.value
     })
     transformControls.setTranslationSnap( 1 )
     transformControls.setRotationSnap( MathUtils.degToRad( 15 ) )
@@ -190,11 +187,21 @@ export default defineComponent({
     // KEYPRESS
     function handleKeyPress(event: KeyboardEvent) { 
       switch ( event.key ) {
+        case "c":
+        case "C":
+          const position = currentCamera.value?.position.clone();
+
+          currentCamera.value = currentCamera.value?.type === 'PerspectiveCamera' ? orthoCamera as OrthographicCamera : perspCamera as PerspectiveCamera;
+          //@ts-ignore
+          currentCamera.value.position.copy( position );
+
+          transformControls.camera = currentCamera.value;
+          const currentTarget = currentCamera.value.type === 'PerspectiveCamera' ? perspMapControls.value.target : orthoMapControls.value.target
+
+          currentCamera.value.lookAt( currentTarget.x, currentTarget.y, currentTarget.z );
+          handleResize();
         case "t":
-        case "T":
-          transformControls.showX = true
-          transformControls.showY = false
-          transformControls.showZ = true
+        case "T":          
           console.log('you tryina Translate, bro?')
           transformControls.setMode( 'translate' )
           break
@@ -202,18 +209,12 @@ export default defineComponent({
         case "R":
           if (event.ctrlKey === false) {
             console.log('yo, where is the rotation?')
-            transformControls.showX = false
-            transformControls.showY = true
-            transformControls.showZ = false
             transformControls.setMode( 'rotate' )
             transformControls.rotationSnap = MathUtils.degToRad(15)
           }
           break
         case "s":
         case "S":
-          transformControls.showX = true
-          transformControls.showY = false
-          transformControls.showZ = true
           console.log('adjust scale?')
           transformControls.setMode( 'scale' )            
           break
@@ -243,46 +244,64 @@ export default defineComponent({
         }
     }
     // MOUSE CLICK
+    const selectedMode: Ref<string> = inject('selectedMode') as Ref<string>
+    let isEdit = ref(inject('isEdit') as boolean)
+    watch(
+      () => selectedMode.value, 
+      (newValue) => {
+        isEdit.value = newValue === 'Edit' ? true : false
+        if(isEdit.value === false) {
+          console.log('detaching transforms')
+          transformControls.detach()
+        }
+        // transformControls.enabled = isEdit.value
+      }
+    )
+    
     let index = 0
     function handleIntersects(event: MouseEvent) { 
       event.preventDefault()
       // Find intersections.
       let intersects = raycaster.intersectObjects(scene.children, true) as Intersection[]
       if (intersects.length > 0) {       
-        // if existing object is selected        
-        // if no object is selected
-        console.log('intersects @' + index + ' length: ', intersects.length)
-        index ++
-        if (
-          intersects[0].object.type === 'GridHelper' || 
-          intersects[0].object.type === 'TransformControlsPlane' ||
-          (intersects[0].object.type === 'Line' && intersects[0].object.parent?.type !== 'TransformControlsPlane')
-        ) {
-            console.log('first one was one of the three: ', intersects[0])
-            let mesh = createMesh(intersects[0].point.x, intersects[0].point.z) as Mesh
-            scene.add(mesh)
-            transformControls.attach(mesh)
-            scene.add(transformControls as TransformControls)
-            intersects.length = 0
-        } else if (
-          intersects[0].object.type === 'Mesh' && 
-          intersects[0].object.name.includes('cube')
-        )
-        {
-            intersects.forEach((intersect) => {
-              console.log('intersect @' + intersects.indexOf(intersect) + ': ', intersect )
-              transformControls.attach(intersect.object)
-              scene.add(transformControls as TransformControls)
+        // MODES
+        switch(selectedMode.value) {
+          case 'Add':
+            if ( intersects[0].object.type === 'GridHelper') {
+              console.log('intersect: ', intersects[0])
+              let mesh = createMesh(intersects[0].point.x, intersects[0].point.z) as Mesh
+              scene.add(mesh)
               intersects.length = 0
-            })
+            }
+          case 'Edit':       
+            console.log('Edit click: ', intersects[0])      
+            if (intersects[0].object.name.includes('mesh')) {
+              intersects.forEach((intersect) => {
+                // console.log('intersect @' + intersects.indexOf(intersect) + ': ', intersect )
+                transformControls.enabled = isEdit.value = true
+                transformControls.attach(intersect.object)
+                scene.add(transformControls as TransformControls)
+                intersects.length = 0
+              })
+            }
+          case 'Delete':
+            if (intersects[0].object.name.includes('mesh')) {
+              console.log('deleting: ', intersects[0].object.name)
+              intersects[0].object.removeFromParent()
+              intersects.length = 0
+            }
         }
       }
     }    
     
     // ANIMATE LOOP
     const animate = () => {
-      mapControls.value.update()
-      raycaster.setFromCamera(mouseVector, camera)
+      if (currentCamera.value.type === 'PerspectiveCamera') {
+        perspMapControls.value.update()
+      } else {
+        orthoMapControls.value.update()
+      }      
+      raycaster.setFromCamera(mouseVector, currentCamera.value)
       render()
       window.requestAnimationFrame(animate)
     }
@@ -291,23 +310,45 @@ export default defineComponent({
     onMounted(() => {
       console.log('you mounted')
       const app = document.querySelector('#app')
-      app?.append(renderer.value.domElement)
+      app?.append(renderer.domElement)
       window.addEventListener( 'keydown', handleKeyPress, true)
-      renderer.value.domElement.addEventListener('mousemove', (event: MouseEvent) => {
-        mouseVector.x = (event.offsetX / renderer.value.domElement.clientWidth) * 2 - 1
-        mouseVector.y = -(event.offsetY / renderer.value.domElement.clientHeight) * 2 + 1
+      window.addEventListener('resize', handleResize, true)
+      renderer.domElement.addEventListener('mousemove', (event: MouseEvent) => {
+        mouseVector.x = (event.offsetX / renderer.domElement.clientWidth) * 2 - 1
+        mouseVector.y = -(event.offsetY / renderer.domElement.clientHeight) * 2 + 1
       })
-      renderer.value.domElement.addEventListener('mousedown', handleIntersects, true)
-      selectedShape.value = inject('selectedShape') as string
+      renderer.domElement.addEventListener('mousedown', handleIntersects, true)      
+      console.log('onMounted selectedShape: ', selectedShape.value)
+      console.log('onMounted selectedMode: ', selectedMode.value)
       animate()
     })
 
     // DESTROY
     onUnmounted(() => {
       console.log('you unmounted')
-      document.querySelector('#app')?.removeChild(renderer.value.domElement)
+      document.querySelector('#app')?.removeChild(renderer.domElement)
       window.removeEventListener( 'keydown', handleKeyPress, true)
+      window.removeEventListener( 'resize', handleResize, true)
     })
+
+    // WINDOW RESIZE HANDLER
+    function handleResize() {
+      let canvasWidth: number = document.documentElement.clientWidth
+      let canvasHeight: number = document.documentElement.clientHeight - headerHeightRef.value
+      const aspectRatio = canvasWidth / canvasHeight
+
+      perspCamera.aspect = aspectRatio;
+      perspCamera.updateProjectionMatrix();
+
+      orthoCamera.left = orthoCamera.bottom * aspectRatio;
+      orthoCamera.right = orthoCamera.top * aspectRatio;
+      orthoCamera.updateProjectionMatrix();
+
+      renderer.setSize( canvasWidth, canvasHeight );
+
+      render();
+
+    }
   }
 })
 
