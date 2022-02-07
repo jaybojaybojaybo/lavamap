@@ -29,8 +29,9 @@ import { TransformControls } from 'three/examples/jsm/controls/TransformControls
 // VUE
 import { defineComponent, inject, onMounted, onUnmounted, reactive, ref, Ref, toRef, toRefs, watch } from 'vue'
 
-export default defineComponent({  
-  setup() {
+export default defineComponent({
+  emits: ['selectedMode'],
+  setup(props, {emit}) {
     // NAVBAR INFO
     const headerHeightRef = ref<number>(
       (
@@ -40,17 +41,17 @@ export default defineComponent({
       ) as number
     )
     // CANVAS + VARIABLES
-    let canvasWidth: number = document.documentElement.clientWidth
-    let canvasHeight: number = document.documentElement.clientHeight - headerHeightRef.value
-    const aspectRatio = canvasWidth / canvasHeight
+    let canvasWidth = ref(document.documentElement.clientWidth)
+    let canvasHeight = ref(document.documentElement.clientHeight)
+    const aspectRatio = canvasWidth.value / canvasHeight.value
    
     // RENDERER
     const renderer = new WebGLRenderer({antialias: true})
-    renderer.setSize(canvasWidth, canvasHeight)
+    renderer.setSize(canvasWidth.value, canvasHeight.value)
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
-    renderer.domElement.style.position = 'absolute'
-    renderer.domElement.style.top = headerHeightRef.value + 'px'
     renderer.physicallyCorrectLights = true
+    // renderer.domElement.style.position = 'absolute'
+    // renderer.domElement.style.top = headerHeightRef.value + 'px'
     renderer.outputEncoding = sRGBEncoding
     renderer.toneMapping = ReinhardToneMapping
     renderer.toneMappingExposure = 12
@@ -71,9 +72,8 @@ export default defineComponent({
 
     // MESHES
     const selectedShape: Ref<string> = inject('selectedShape') as Ref<string>    
-
+    console.log('selectedShape: ', selectedShape.value)
     function createMesh(x: number, y: number) {
-      console.log('selectedShape: ', selectedShape.value)
       if (selectedShape.value === 'Cube') {
         return createCube(x, y)          
       } else if (selectedShape.value === 'Tetrahedron') {
@@ -103,7 +103,7 @@ export default defineComponent({
       const cube = new Mesh( geometry, material )
       cube.position.copy(new Vector3(Math.round(x), cubeDims.height/2, Math.round(z)))
       cube.material.color.setHex( Math.random() * cubeColor )
-      cube.name = 'mesh' + cubeIndex.toString();
+      cube.name = 'mesh-cube' + cubeIndex.toString();
       cubeIndex++
       return cube
     }
@@ -120,9 +120,9 @@ export default defineComponent({
         // opacity: 0.0
       })
       const tetra = new Mesh( geometry, material )
-      tetra.position.copy(new Vector3(Math.round(x), radius/2, Math.round(z)))
+      tetra.position.copy(new Vector3(Math.round(x), radius/1.75  , Math.round(z)))
       tetra.material.color.setHex( Math.random() * tetraColor )
-      tetra.name = 'mesh' + tetraIndex.toString();
+      tetra.name = 'mesh-tetra' + tetraIndex.toString();
       tetraIndex++
       return tetra
     }
@@ -141,9 +141,9 @@ export default defineComponent({
         // opacity: 0.0
       })
       const sphere = new Mesh( geometry, material )
-      sphere.position.copy(new Vector3(Math.round(x), radius/2, Math.round(z)))
+      sphere.position.copy(new Vector3(Math.round(x), radius, Math.round(z)))
       sphere.material.color.setHex( Math.random() * sphereColor )
-      sphere.name = 'mesh' + sphereIndex.toString();
+      sphere.name = 'mesh-sphere' + sphereIndex.toString();
       sphereIndex++
       return sphere
     }
@@ -181,25 +181,61 @@ export default defineComponent({
     
     // RAYCASTER + MOUSE
     const raycaster: Raycaster = new Raycaster()
-    const mouseVector: Vector2 = new Vector2()
+    const mouseVector = ref(new Vector2())
 
     // EVENT HANDLERS
+    // WATCHERS
+    const selectedMode: Ref<string> = inject('selectedMode') as Ref<string>
+    let isEdit: Ref<Boolean> = ref(inject('isEdit') as boolean)
+      // MODE
+      watch(
+        () => selectedMode.value, 
+        (newValue) => {
+          // turn on/off isEdit
+          isEdit.value = newValue === 'Edit' ? true : false
+        }
+      )
+      // EDIT ACTIVE STATE
+      watch(
+        () => isEdit.value,
+        (newValue) => {
+          // when saved, edit is turned off until next click
+          if (newValue === false) {
+            console.log('isEdit is false')
+            transformControls.detach()
+            transformControls.enabled = false
+            scene.remove(transformControls)
+          } else if (newValue === true) {
+            transformControls.enabled = true
+          }
+        }
+      )
     // KEYPRESS
     function handleKeyPress(event: KeyboardEvent) { 
       switch ( event.key ) {
-        case "c":
-        case "C":
-          const position = currentCamera.value?.position.clone();
-
-          currentCamera.value = currentCamera.value?.type === 'PerspectiveCamera' ? orthoCamera as OrthographicCamera : perspCamera as PerspectiveCamera;
-          //@ts-ignore
-          currentCamera.value.position.copy( position );
-
-          transformControls.camera = currentCamera.value;
-          const currentTarget = currentCamera.value.type === 'PerspectiveCamera' ? perspMapControls.value.target : orthoMapControls.value.target
-
-          currentCamera.value.lookAt( currentTarget.x, currentTarget.y, currentTarget.z );
-          handleResize();
+        // case "c":
+        // case "C":
+        //   const position = currentCamera.value?.position.clone();
+        //   currentCamera.value = currentCamera.value?.type === 'PerspectiveCamera' ? orthoCamera as OrthographicCamera : perspCamera as PerspectiveCamera;
+        //   //@ts-ignore
+        //   currentCamera.value.position.copy( position );
+        //   transformControls.camera = currentCamera.value;
+        //   const currentTarget = currentCamera.value.type === 'PerspectiveCamera' ? perspMapControls.value.target : orthoMapControls.value.target
+        //   currentCamera.value.lookAt( currentTarget.x, currentTarget.y, currentTarget.z );
+        //   handleResize();
+        case "a":
+        case "A":
+          selectedMode.value = 'Add'
+          emit('selectedMode', selectedMode.value)
+          break
+        case "e":
+        case "E":
+          selectedMode.value = 'Edit'
+          break
+        case "d":
+        case "D":
+          selectedMode.value = 'Delete'
+          break
         case "t":
         case "T":          
           console.log('you tryina Translate, bro?')
@@ -239,60 +275,53 @@ export default defineComponent({
           transformControls.enabled = ! transformControls.enabled            
           break
         case "Esc": // Esc
-            transformControls.reset()            
-            break
+          transformControls.reset()            
+          break
         }
     }
     // MOUSE CLICK
-    const selectedMode: Ref<string> = inject('selectedMode') as Ref<string>
-    let isEdit = ref(inject('isEdit') as boolean)
-    watch(
-      () => selectedMode.value, 
-      (newValue) => {
-        isEdit.value = newValue === 'Edit' ? true : false
-        if(isEdit.value === false) {
-          console.log('detaching transforms')
-          transformControls.detach()
-        }
-        // transformControls.enabled = isEdit.value
-      }
-    )
-    
-    let index = 0
+    let index = 0    
     function handleIntersects(event: MouseEvent) { 
       event.preventDefault()
       // Find intersections.
       let intersects = raycaster.intersectObjects(scene.children, true) as Intersection[]
-      if (intersects.length > 0) {       
+      if (intersects.length > 0) {    
+        console.log('intersect: ', intersects[0])   
         // MODES
         switch(selectedMode.value) {
           case 'Add':
+            console.log('Add click: ', intersects[0])            
             if ( intersects[0].object.type === 'GridHelper') {
               console.log('intersect: ', intersects[0])
               let mesh = createMesh(intersects[0].point.x, intersects[0].point.z) as Mesh
               scene.add(mesh)
+              console.log('mesh: ', mesh)
               intersects.length = 0
-            }
+            } 
+            break
           case 'Edit':       
-            console.log('Edit click: ', intersects[0])      
+            console.log('Edit click: ', intersects[0])
+            transformControls.enabled = isEdit.value = true
             if (intersects[0].object.name.includes('mesh')) {
               intersects.forEach((intersect) => {
-                // console.log('intersect @' + intersects.indexOf(intersect) + ': ', intersect )
-                transformControls.enabled = isEdit.value = true
+                console.log('yo - editing')                
                 transformControls.attach(intersect.object)
                 scene.add(transformControls as TransformControls)
                 intersects.length = 0
               })
             }
+            break
           case 'Delete':
+            console.log('Delete click: ', intersects[0])
             if (intersects[0].object.name.includes('mesh')) {
-              console.log('deleting: ', intersects[0].object.name)
+              console.log('deleted: ', intersects[0].object.name)
               intersects[0].object.removeFromParent()
               intersects.length = 0
             }
+            break
         }
       }
-    }    
+    }
     
     // ANIMATE LOOP
     const animate = () => {
@@ -301,7 +330,7 @@ export default defineComponent({
       } else {
         orthoMapControls.value.update()
       }      
-      raycaster.setFromCamera(mouseVector, currentCamera.value)
+      raycaster.setFromCamera(mouseVector.value, currentCamera.value)
       render()
       window.requestAnimationFrame(animate)
     }
@@ -311,13 +340,16 @@ export default defineComponent({
       console.log('you mounted')
       const app = document.querySelector('#app')
       app?.append(renderer.domElement)
-      window.addEventListener( 'keydown', handleKeyPress, true)
-      window.addEventListener('resize', handleResize, true)
+      window.addEventListener( 'keydown', handleKeyPress, true)      
+      window.addEventListener('resize', handleResize, true)      
+      const rect = renderer.domElement.getBoundingClientRect();
       renderer.domElement.addEventListener('mousemove', (event: MouseEvent) => {
-        mouseVector.x = (event.offsetX / renderer.domElement.clientWidth) * 2 - 1
-        mouseVector.y = -(event.offsetY / renderer.domElement.clientHeight) * 2 + 1
+        // console.log('event: ', event)
+        // console.log('rendererDom: ', renderer.domElement)
+        mouseVector.value.x = ( ( event.offsetX - rect.left ) / ( rect.right - rect.left ) ) * 2 - 1;
+        mouseVector.value.y = - ( ( event.offsetY - rect.top ) / ( rect.bottom - rect.top) ) * 2 + 1;
       })
-      renderer.domElement.addEventListener('mousedown', handleIntersects, true)      
+      renderer.domElement.addEventListener('mousedown', handleIntersects, true)
       console.log('onMounted selectedShape: ', selectedShape.value)
       console.log('onMounted selectedMode: ', selectedMode.value)
       animate()
@@ -328,14 +360,14 @@ export default defineComponent({
       console.log('you unmounted')
       document.querySelector('#app')?.removeChild(renderer.domElement)
       window.removeEventListener( 'keydown', handleKeyPress, true)
-      window.removeEventListener( 'resize', handleResize, true)
+      window.removeEventListener( 'resize', handleResize, true)     
     })
 
     // WINDOW RESIZE HANDLER
     function handleResize() {
-      let canvasWidth: number = document.documentElement.clientWidth
-      let canvasHeight: number = document.documentElement.clientHeight - headerHeightRef.value
-      const aspectRatio = canvasWidth / canvasHeight
+      canvasWidth.value = document.documentElement.clientWidth
+      canvasHeight.value = document.documentElement.clientHeight
+      const aspectRatio = canvasWidth.value / canvasHeight.value
 
       perspCamera.aspect = aspectRatio;
       perspCamera.updateProjectionMatrix();
@@ -344,7 +376,7 @@ export default defineComponent({
       orthoCamera.right = orthoCamera.top * aspectRatio;
       orthoCamera.updateProjectionMatrix();
 
-      renderer.setSize( canvasWidth, canvasHeight );
+      renderer.setSize( canvasWidth.value, canvasHeight.value );
 
       render();
 
