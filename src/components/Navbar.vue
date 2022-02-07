@@ -9,14 +9,14 @@
             <!-- MENU -->
             <div class="flex pt-2 pb-4" @click="modeOpen = !modeOpen">
                 <!-- mode Name -->            
-                <div class="vertical-divider m-3">Current Mode: {{ modeName }}</div>
+                <div class="vertical-divider m-3">Current Mode: {{ selectedMode }}</div>
                 <!-- mode Dropdown -->
                 <mode-dropdown :modes="modes" v-if="modeOpen" @closeMenu="closeMenus" @selectedMode="setMode"></mode-dropdown>
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 m-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
                 </svg>
                 <button class="bg-transparent hover:bg-black text-black font-semibold hover:text-white h-7 px-2 border border-blue-500 hover:border-transparent rounded" 
-                        v-if="isEditMode" 
+                        v-if="isEdit" 
                         @click="saveEdit">
                     Save
                 </button>     
@@ -36,6 +36,7 @@
                 </svg>
             </div>        
         </div>
+        <div class="float-right justify-left text-black h-6 pt-5 mr-3">a=add, e=edit, d=delete, t=translate, r=rotate, s=scale</div>
     </header>
 </template>
 
@@ -64,16 +65,16 @@ export default defineComponent({
             'Edit',
             'Delete'            
         ]
-        let modeName = ref('')        
         const modeOpen = ref(false);        
-        let isEditMode = ref(inject('isEdit'))
+        let isEdit = ref(inject('isEdit'))
+        const selectedMode = ref(inject('selectedMode') as string)
         function setMode(val: string) {
             console.log('val: ', val)
             if (val === 'Edit') {
-                isEditMode.value = true
+                isEdit.value = true
             }
-            modeName.value = val
-            emit('setMode', modeName)
+            selectedMode.value = val
+            emit('setMode', selectedMode)
         }
         // SHAPES
         const shapes = [
@@ -100,13 +101,13 @@ export default defineComponent({
         }
 
         onMounted(() => {
-            isEditMode.value = false
-            setMode(modeName.value = modes[0])
+            isEdit.value = false
+            setMode(selectedMode.value = modes[0])
             setShape(shapeName.value = shapes[0])
         })
 
         return {
-            modeName,
+            selectedMode,
             modes,
             modeOpen,
             setMode,
@@ -115,7 +116,7 @@ export default defineComponent({
             shapeOpen,
             setShape,
             closeMenus,
-            isEditMode,
+            isEdit,
             saveEdit
         }
     },
