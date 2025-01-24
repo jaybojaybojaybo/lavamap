@@ -1,5 +1,7 @@
 # lavamap
 
+[Deployed Here](https://jaybojaybojaybo.github.io/lavamap/)
+
 ## Project setup
 ```
 npm install
